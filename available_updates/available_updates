@@ -1,0 +1,12 @@
+#!/bin/sh
+if [ `id -u` -ne 0 ]; then
+  exit 77
+fi
+
+portsnap fetch update >/dev/null
+portmaster -y --check-port-dbdir >/dev/null
+portmaster -y --check-depends >/dev/null
+portmaster -y --clean-distfiles >/dev/null
+portmaster -y --clean-packages >/dev/null
+
+recalc_updates

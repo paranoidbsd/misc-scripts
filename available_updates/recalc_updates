@@ -1,0 +1,45 @@
+#!/bin/sh
+if [ `id -u` -ne 0 ]; then
+  exit 77
+fi
+rm /tmp/available_updates.* 2>/dev/null
+f_one=`mktemp /tmp/available_updates.XXXXXX`
+f_two=`mktemp /tmp/available_updates.XXXXXX`
+pkg version -voUPL= | sort -u > $f_one
+pkg audit -F >/dev/null 2>&1
+width=`grep '<' $f_one | head -1 | awk '{print index($0, "<")}'`
+longest=`wc -L $f_one | awk '{ print $1 }'`
+verlen=$(( longest - width - 30 ))
+while read origin op status; do
+  unset flag
+  curver=`pkg query %v $origin`
+  name=`pkg query %n-%v $origin`
+  if ! pkg audit "${name}" >/dev/null 2>&1; then
+    : ${flag:='V'}
+  fi
+  if printf '%s' "${status}" | grep 'needs updating' >/dev/null 2>&1; then
+    newver=`printf '%s' "${status}" |\
+      sed -E -e 's/needs updating \(port has (.*)\)/\1/'`
+    cleancur=`printf '%s' "$curver" | sed -E -e 's/_.*$//'`
+    cleannew=`printf '%s' "$newver" | sed -E -e 's/_.*$//'`
+    clean_op=`pkg version -t "${cleancur}" "${cleannew}"`
+    if [ "${clean_op}" = '=' ]; then
+      : ${flag:='P'}
+    fi
+    : ${flag:='U'}
+  elif printf '%s' "${status}" | grep 'orphaned' >/dev/null 2>&1; then
+    newver='orphaned'
+    : ${flag:='O'}
+  else
+    newver="${status}"
+    : ${flag:='-'}
+  fi
+  printf "%-${width}s" "${origin}" >> $f_two
+  printf '%-3s' "${flag:-'X'}:" >> $f_two
+  printf "%-${verlen}s" "${curver}" >> $f_two
+  printf '%-2s' "${op}" >> $f_two
+  printf '%s\n' "${newver}" >> $f_two
+done < $f_one
+rm $f_one
+mv $f_two /root/available_updates.txt
+${PAGER:-more} /root/available_updates.txt
