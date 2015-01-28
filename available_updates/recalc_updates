@@ -2,7 +2,12 @@
 if [ `id -u` -ne 0 ]; then
   exit 77
 fi
-rm /tmp/available_updates.* 2>/dev/null
+
+# clean up eventually existing old files
+for _oldf in /tmp/available_updates.*; do
+  rm "${_oldf}" 2>/dev/null
+done
+
 f_one=`mktemp /tmp/available_updates.XXXXXX`
 f_two=`mktemp /tmp/available_updates.XXXXXX`
 pkg version -voUPL= | sort -u > $f_one
