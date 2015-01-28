@@ -8,8 +8,9 @@ f_two=`mktemp /tmp/available_updates.XXXXXX`
 pkg version -voUPL= | sort -u > $f_one
 pkg audit -F >/dev/null 2>&1
 width=`grep '<' $f_one | head -1 | awk '{print index($0, "<")}'`
-longest=`wc -L $f_one | awk '{ print $1 }'`
-verlen=$(( longest - width - 30 ))
+verlen=`sed -E -n -e 's/.*port has (.*)\).*/\1/p' $f_one |\
+  wc -L | awk '{ print $1 }'`
+verlen=$(( verlen + 1 ))
 while read origin op status; do
   unset flag
   curver=`pkg query %v $origin`
