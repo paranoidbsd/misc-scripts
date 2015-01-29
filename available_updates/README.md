@@ -6,6 +6,8 @@ Simple scripts I use to update my ports tree.
 The scripts assume you use `portsnap`, `portmaster` and `pkg`. There
 is not much in terms of resiliency or error handling. Use at your own
 risk.
+Error handling, readability and comments received a small update. It's
+still a shellscript you execute as root. Read it.
 
 `available_updates` updates the ports tree and rebuilds the info file,
 `recalc_updates` only rebuilds the info file.
@@ -33,10 +35,11 @@ you with your update strategy (does for me, that's why I wrote it).
 The line format is `origin`, `flag`, `current version`, `predicate` and
 `new version`. The spacing between columns is not static, but tries to
 be semi-intelligent based on the longest origin path and longest
-version number.
+current version number.
 
 The flags are:
-* `V` current version has a known vulnerability
+* `V` currently installed version has a known vulnerability
+* `!` version available for update has a known vulnerability
 * `P` port revision update
 * `U` upstream version update
 * `O` orphaned port

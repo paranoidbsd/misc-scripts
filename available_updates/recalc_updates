@@ -71,6 +71,16 @@ while read origin op status; do
     # if the $flag indicator is still unset, the upstream port version
     # has changed. Set it to U
     : ${flag:=U}
+
+    # Check pkg audit if the new version available for installation is
+    # affected by a known security vulnerability. Override $flag with
+    # ! if it is. Add the new version number afterwards in case it
+    # contains a % and is interpreted as a format string
+    newname=`pkg query %n $origin`
+    newname="${newname}-${newver}"
+    if ! pkg audit "${newname}" >/dev/null 2>&1; then
+      flag="!"
+    fi
   elif printf '%s' "${status}" | grep 'orphaned' >/dev/null 2>&1; then
     # handle orphaned ports
     newver='orphaned'
