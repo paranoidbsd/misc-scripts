@@ -1,4 +1,5 @@
 #!/bin/sh
+# Must be root to play
 if [ `id -u` -ne 0 ]; then
   exit 77
 fi
@@ -88,6 +89,8 @@ while read origin op status; do
   printf '%s\n' "${newver}" >> $f_two
 done < $f_one
 
+# Remove first temporary file, move second one in live file location
 rm $f_one
 mv $f_two /root/available_updates.txt
+# Display the created file
 ${PAGER:-more} /root/available_updates.txt
