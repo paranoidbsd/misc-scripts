@@ -32,36 +32,62 @@ width=$(( width + 1 ))
 # Create second temporay file
 f_two=`mktemp /tmp/available_updates.XXXXXX`
 
+# Build the output file
 while read origin op status; do
+  # reset var between loop iterations
   unset flag
+
+  # get current version
   curver=`pkg query %v $origin`
+
+  # build a pkg string that `pkg audit` recognizes and check if the
+  # current version has a known security vulnerability.
+  # Set $flag indicator to V if it does
   name=`pkg query %n-%v $origin`
   if ! pkg audit "${name}" >/dev/null 2>&1; then
-    : ${flag:='V'}
+    : ${flag:=V}
   fi
-  if printf '%s' "${status}" | grep 'needs updating' >/dev/null 2>&1; then
+
+  # handle at least the most common cases specifically
+  if printf '%s' "${status}" | grep 'needs updating' >/dev/null 2>&1;
+  then
+    # extract available version
     newver=`printf '%s' "${status}" |\
       sed -E -e 's/needs updating \(port has (.*)\)/\1/'`
-    cleancur=`printf '%s' "$curver" | sed -E -e 's/_.*$//'`
-    cleannew=`printf '%s' "$newver" | sed -E -e 's/_.*$//'`
-    clean_op=`pkg version -t "${cleancur}" "${cleannew}"`
-    if [ "${clean_op}" = '=' ]; then
-      : ${flag:='P'}
+
+    # strip the _foo part of the port version that indicates an
+    # updated port, with no change in upstream version
+    cleancur=`printf '%s' "${curver}" | sed -E -e 's/_.*$//'`
+    cleannew=`printf '%s' "${newver}" | sed -E -e 's/_.*$//'`
+
+    # check if the upstream version of the installed port is the same
+    # as the upstream version of the available port. If yes, set the
+    # $flag indicator to P
+    predicate=`pkg version -t "${cleancur}" "${cleannew}"`
+    if [ "${predicate}" = '=' ]; then
+      : ${flag:=P}
     fi
-    : ${flag:='U'}
+    # if the $flag indicator is still unset, the upstream port version
+    # has changed. Set it to U
+    : ${flag:=U}
   elif printf '%s' "${status}" | grep 'orphaned' >/dev/null 2>&1; then
+    # handle orphaned ports
     newver='orphaned'
-    : ${flag:='O'}
+    : ${flag:=O}
   else
+    # handle everything else, like installed newer than ports
     newver="${status}"
-    : ${flag:='-'}
+    : ${flag:=-}
   fi
+
+  # write information about current port to output file
   printf "%-${width}s" "${origin}" >> $f_two
-  printf '%-3s' "${flag:-'X'}:" >> $f_two
+  printf '%-3s' "${flag:-X}:" >> $f_two
   printf "%-${verlen}s" "${curver}" >> $f_two
   printf '%-2s' "${op}" >> $f_two
   printf '%s\n' "${newver}" >> $f_two
 done < $f_one
+
 rm $f_one
 mv $f_two /root/available_updates.txt
 ${PAGER:-more} /root/available_updates.txt
