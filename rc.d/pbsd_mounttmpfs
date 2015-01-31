@@ -1,0 +1,41 @@
+#!/bin/sh
+#
+# ParanoidBSD - mount tmpfs filesystems marked late
+#
+
+# PROVIDE: pbsd_mounttmpfs
+# REQUIRE: root mountcritlocal cleanvar zfs
+# BEFORE: FILESYSTEMS
+# KEYWORD: nojail
+
+. /etc/rc.subr
+
+name="pbsd_mounttmpfs"
+start_cmd="pbsd_mounttmpfs_start"
+stop_cmd=":"
+
+pbsd_mounttmpfs_start()
+{
+  local err latefs
+
+  # Mount tmpfs filesystems marked late
+  #
+  err=0
+  echo -n 'Mounting delayed tmpfs file systems:'
+  mount -a -L -t tmpfs
+  err=$?
+  echo '.'
+
+  case ${err} in
+    0)
+      ;;
+    *)
+      echo 'Mounting /etc/fstab filesystems failed,' \
+        ' startup aborted'
+      stop_boot true
+      ;;
+  esac
+}
+
+load_rc_config $name
+run_rc_command "$1"

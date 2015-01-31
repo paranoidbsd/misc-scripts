@@ -1,0 +1,45 @@
+#!/bin/sh
+#
+# ParanoidBSD - mount pseudofs filesystems marked late
+#
+
+# PROVIDE: pbsd_mountpseudofs
+# REQUIRE: root mountcritlocal cleanvar zfs pbsd_mounttmpfs
+# BEFORE: FILESYSTEMS
+# KEYWORD: nojail
+
+. /etc/rc.subr
+
+name="pbsd_mountpseudofs"
+start_cmd="pbsd_mountpseudofs_start"
+stop_cmd=":"
+
+pbsd_mountpseudofs_start()
+{
+  local err latefs _t
+
+  # Mount pseudofs filesystems marked late
+  #
+  for _t in procfs fdescfs mqueuefs; do
+    err=0
+    echo -n "Mounting delayed ${_t} file systems:"
+    mount -a -L -t $_t
+    err=$?
+    echo '.'
+
+    case ${err} in
+      0)
+        ;;
+      *)
+        echo 'Mounting /etc/fstab filesystems failed,' \
+          ' startup aborted'
+        stop_boot true
+        # on error, exit the for loop
+        break
+        ;;
+    esac
+  done
+}
+
+load_rc_config $name
+run_rc_command "$1"
