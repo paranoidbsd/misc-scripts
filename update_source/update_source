@@ -33,15 +33,17 @@ fi
 
 # get svn revision of current checkout
 _rev_A=`$_svn info $_src | $_grep ^Revision | $_cut -d' ' -f 2`
+: ${_rev_A:?}
 
 # update source
 $_svn up $_src
 
 # get svn revision after source update
-_rev_C=`$_svn info $_src | $_grep ^Revision | $_cut -d' ' -f 2`
+_rev_B=`$_svn info $_src | $_grep ^Revision | $_cut -d' ' -f 2`
+: ${_rev_B:?}
 
 # show the commit log if changes were pulled
-if [ $_rev_A -ne $_rev_C ]; then
-  _rev_B=$(( _rev_A + 1 ))
-  $_svn log -r ${_rev_B}:${_rev_C} $_src | ${PAGER:-${_more:?}}
+if [ $_rev_A -ne $_rev_B ]; then
+  _rev_LOGSTART=$(( _rev_A + 1 ))
+  $_svn log -r ${_rev_LOGSTART}:${_rev_B} $_src | ${PAGER:-${_more:?}}
 fi
