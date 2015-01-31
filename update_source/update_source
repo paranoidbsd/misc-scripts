@@ -1,16 +1,25 @@
 #!/bin/sh
-if [ `id -u` -ne 0 ]; then
-  printf '%s\n' 'root permission required' >&2
-  exit 77
-fi
 _cut=`which cut`
+: ${_cut:?}
 _grep=`which grep`
+: ${_grep:?}
 _more=`which more`
+: ${_svn:?}
 _svn=`which svnlite`
+: ${_svn:?}
+_printf=`which printf`
+: ${_printf:?}
+_id=`which id`
+: ${_id:?}
 _src=/usr/src
 
+if [ `$_id -u` -ne 0 ]; then
+  $_printf '%s\n' 'root permission required' >&2
+  exit 77
+fi
+
 if ! $_svn info $_src >/dev/null 2>&1; then
-  printf '%s\n' "$_src is not a svn working copy" >&2
+  $_printf '%s\n' "$_src is not a svn working copy" >&2
   exit 65
 fi
 
