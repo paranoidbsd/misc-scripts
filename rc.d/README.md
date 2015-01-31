@@ -32,12 +32,12 @@ The two scripts in this directory, `pbsd_mounttmpfs` and
 everything `FILESYSTEMS` depends on, but want to be run before it -
 they become the last scripts before the `FILESYSTEMS` barrier.
 
-They exploit the fact that kernel provided pseudo filesystems like
-`tmpfs`, `procfs`, `fdescfs` and `mqueuefs` will in fact never require
-interaction with some sort of running userspace daemon. It is therefor
-safe to mount these filesystems much earlier, even if they are marked
-late. And during `mountlate` they will be recognized as having already
-been mounted.
+They exploit the fact that kernel provided filesystems and pseudo
+filesystems like `tmpfs`, `procfs`, `fdescfs` and `mqueuefs` will in
+fact never require interaction with some sort of running userspace
+daemon. It is therefor safe to mount these filesystems much earlier,
+even if they are marked late. And during `mountlate` they will be
+recognized as having already been mounted.
 
 The scripts are namespaced `pbsd_*` mainly so I recognize them during
 `mergemaster` and do not delete them (`mergemaster` will identify them
