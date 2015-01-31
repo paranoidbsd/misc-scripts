@@ -4,7 +4,6 @@ _cut=`which cut`
 _grep=`which grep`
 : ${_grep:?}
 _more=`which more`
-: ${_svn:?}
 _svn=`which svnlite`
 : ${_svn:?}
 _printf=`which printf`
@@ -44,5 +43,5 @@ _rev_C=`$_svn info $_src | $_grep ^Revision | $_cut -d' ' -f 2`
 # show the commit log if changes were pulled
 if [ $_rev_A -ne $_rev_C ]; then
   _rev_B=$(( _rev_A + 1 ))
-  $_svn log -r ${_rev_B}:${_rev_C} $_src | ${PAGER:-$_more}
+  $_svn log -r ${_rev_B}:${_rev_C} $_src | ${PAGER:-${_more:?}}
 fi
