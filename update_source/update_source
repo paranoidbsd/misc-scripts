@@ -3,22 +3,22 @@ if [ `id -u` -ne 0 ]; then
   printf '%s\n' 'root permission required' >&2
   exit 77
 fi
-cut=`which cut`
-grep=`which grep`
-more=`which more`
-svn=`which svnlite`
-src=/usr/src
+_cut=`which cut`
+_grep=`which grep`
+_more=`which more`
+_svn=`which svnlite`
+_src=/usr/src
 
-if ! $svn info $src >/dev/null 2>&1; then
-  printf '%s\n' "$src is not a svn working copy" >&2
+if ! $_svn info $_src >/dev/null 2>&1; then
+  printf '%s\n' "$_src is not a svn working copy" >&2
   exit 65
 fi
 
-rev_A=`$svn info $src | $grep ^Revision | $cut -d' ' -f 2`
-rev_B=$(( rev_A + 1 ))
-$svn up $src
-rev_C=`$svn info $src | $grep ^Revision | $cut -d' ' -f 2`
+_rev_A=`$_svn info $_src | $_grep ^Revision | $_cut -d' ' -f 2`
+_rev_B=$(( _rev_A + 1 ))
+$_svn up $_src
+_rev_C=`$_svn info $_src | $_grep ^Revision | $_cut -d' ' -f 2`
 
-if [ $rev_A -ne $rev_C ]; then
-  $svn log -r ${rev_B}:${rev_C} $src | ${PAGER:-$more}
+if [ $_rev_A -ne $_rev_C ]; then
+  $_svn log -r ${_rev_B}:${_rev_C} $_src | ${PAGER:-$_more}
 fi
