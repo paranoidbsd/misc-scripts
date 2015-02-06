@@ -58,8 +58,8 @@ while read origin op status; do
 
     # strip the _foo part of the port version that indicates an
     # updated port, with no change in upstream version
-    cleancur=`printf '%s' "${curver}" | sed -E -e 's/_.*$//'`
-    cleannew=`printf '%s' "${newver}" | sed -E -e 's/_.*$//'`
+    cleancur=`printf '%s' "${curver}" | sed -E -e 's/[_,].*$//'`
+    cleannew=`printf '%s' "${newver}" | sed -E -e 's/[_,].*$//'`
 
     # check if the upstream version of the installed port is the same
     # as the upstream version of the available port. If yes, set the
