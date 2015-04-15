@@ -47,3 +47,44 @@ The flags are:
 * `X` something went wrong with the script somewhere
 
 Too trivial for copyright.
+
+Currently Known Problems
+========================
+
+False Positive ! Flag
+---------------------
+
+If a security issue is registered within VuXML as affecting the
+following versions:
+
+```
+ruby20 < 2.0.0.645,1
+ruby   < 2.1.6,1
+ruby22 < 2.2.2,1
+```
+
+and your `/etc/make.conf` contains the following definition:
+
+```
+DEFAULT_VERSIONS=   ruby=2.0
+```
+
+at the time that you have built the package (yourself), then
+`pkg query %n lang/ruby20` will return `ruby` instead of
+`ruby20`. The `recalc_updates` script in turn will use this to
+construct `ruby-2.0.0.645,1` as the version available for updating,
+issuing `pkg audit 'ruby-2.0.0.645,1'` to determine if the port should
+be flagged with `!`. But this will be compared, in this example,
+against `ruby < 2.1.6,1` instead of `ruby20-2.0.0.645,1'` and will thus
+give a false-positive vulnerability warning.
+
+By using the output of the following command:
+
+```
+~% make -D__MAKE_CONF -C /usr/ports/lang/ruby20 package-name
+ruby20-2.0.0.645,1
+```
+
+instead of assembling it via `pkg query %n` this should be
+resolvable, since the settings in `/etc/make.conf` can be ignored this
+way.
