@@ -1,0 +1,115 @@
+#!/bin/sh
+if [ `id -u` -ne 0 ]; then
+	printf '%s\n' 'root permission required' >&2
+	exit 77
+fi
+
+#
+# base directory in which the log hierarchy wil be created
+LOGHIER='/root/compile.logs'
+# base dataset for which a recursive snapshot will be taken
+ZDATASET='tank/sys'
+# source tree directory
+SRCDIR='/usr/src'
+if ! [ -d "${SRCDIR:?}" ]; then
+	printf '%s\n' "Source tree directory ${SRCDIR}" \
+		' does not exist or is no directory' >&2
+	exit 66
+fi
+if ! svnlite info "${SRCDIR}" >/dev/null 2>&1; then
+	printf '%s\n' "${SRCDIR} is not a svn working copy" >&2
+	exit 65
+fi
+
+#
+# kernel config directory
+MACH=$( sysctl -n hw.machine )
+KERNDIR="${SRCDIR}/sys/${MACH:?}/conf"
+if ! [ -d "${KERNDIR:?}" ]; then
+	printf '%s\n' "${KERNDIR} does not exist" >&2
+	exit 66
+fi
+KGEN="${KERNDIR}/GENERIC"
+if ! [ -f "${KGEN}" ]; then
+	printf '%s\n' 'GENERIC kernel conf not found' >&2
+	exit 66
+fi
+
+#
+# config
+TIMESTAMP=$( date +%s )
+SVNREV=$( svnlite info "${SRCDIR}" |\
+	grep ^Revision |\
+	cut -d ' ' -f 2 )
+SNAPSHOT="${ZDATASET:?}@${SVNREV:?}"
+LOGDIR="${LOGHIER:?}/${TIMESTAMP:?}_r${SVNREV}"
+
+#
+# determine which kernel we'll use
+KERN=$( grep KERNCONF /etc/make.conf 2>/dev/null |\
+	awk '{ print $2 }' |\
+	cut -d \" -f 2 |\
+	cut -d \' -f 2 )
+if [ -n "${KERN}" -a -f "${KERNDIR}/${KERN}" ]; then
+	KCONF="${KERNDIR}/${KERN}"
+	printf '%s\n' "using kernel conf: ${KERN}"
+else
+	KCONF="${KGEN}"
+	printf '%s\n' 'using kernel conf: GENERIC'
+fi
+
+#
+# Setup
+# Ensure directories exist
+if ! [ -d "${LOGHIER}" ]; then
+	mkdir -p "${LOGHIER}" || exit 73
+fi
+if ! [ -d "${LOGDIR}" ]; then
+	mkdir -p "${LOGDIR}" || exit 73
+fi
+# Create zfs snapshot
+if ! zfs list -t snapshot "${SNAPSHOT}" >/dev/null 2>&1; then
+	zfs snapshot -r "${SNAPSHOT}" || exit 73
+fi
+# Backup configuration used for this compile
+if [ -f /etc/make.conf ]; then
+	cp /etc/make.conf "${LOGDIR}/make.conf" || exit 73
+	xz "${LOGDIR}/make.conf" || exit 73
+fi
+if [ -f /etc/src.conf ]; then
+	cp /etc/src.conf "${LOGDIR}/src.conf" || exit 73
+	xz "${LOGDIR}/src.conf" || exit 73
+fi
+cp "${KCONF}" "${LOGDIR}/kernel.conf" || exit 73
+xz "${LOGDIR}/kernel.conf" || exit 73
+cp "${KGEN}" "${LOGDIR}/generic.conf" || exit 73
+xz "${LOGDIR}/generic.conf" || exit 73
+
+#
+# Start recompile
+# cleanup objdir
+LOGTIME=$( date +%FT%T%z )
+printf '%s\n' "${LOGTIME} cleaning up objdir" >> "${LOGDIR}/progress"
+nice -n 5 make -C "${SRCDIR}" clean || exit 69
+nice -n 5 make -C "${SRCDIR}" cleandir || exit 69
+
+# run buildworld
+LOGTIME=$( date +%FT%T%z )
+printf '%s\n' "${LOGTIME} starting buildworld" >> "${LOGDIR}/progress"
+nice -n 10 \
+	script "${LOGDIR}/${SVNREV}_buildworld.log" \
+	make -j 8 -C "${SRCDIR}" buildworld || exit 69
+xz "${LOGDIR}/${SVNREV}_buildworld.log" || exit 73
+
+# run buildkernel
+LOGTIME=$( date +%FT%T%z )
+printf '%s\n' "${LOGTIME} starting buildkernel" >> "${LOGDIR}/progress"
+nice -n 10 \
+	script "${LOGDIR}/${SVNREV}_buildkernel.log" \
+	make -j 8 -C "${SRCDIR}" buildkernel || exit 69
+xz "${LOGDIR}/${SVNREV}_buildkernel.log" || exit 73
+
+# wrap things up
+LOGTIME=$( date +%FT%T%z )
+printf '%s\n' "${LOGTIME} finished" >> "${LOGDIR}/progress"
+xz "${LOGDIR}/progress"
