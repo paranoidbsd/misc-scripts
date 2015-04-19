@@ -8,14 +8,60 @@ write_output_and_exit () {
   local taskfile
   taskfile=$( mktemp /tmp/available_updates.task.XXXXXX )
 
+  if [ $updating_entries -gt 0 ]; then
+    fp="+"
+  else
+    fp=":"
+  fi
+
   printf "%-${origin_len}s" "${origin}" >> $taskfile
-  printf '%-3s' "${flag:-X}:" >> $taskfile
+  printf '%-3s' "${flag:-X}${fp}" >> $taskfile
   printf "%-${version_len}s" "${current}" >> $taskfile
   printf '%-2s' "${predicate}" >> $taskfile
   printf '%s\n' "${available}" >> $taskfile
   exit 0
 }
 
+# get installation date of the package (unix timestamp)
+installdate=$( pkg query %t $origin )
+
+# filter the timestamps from UPDATING into a temp file,
+# explicitly sort the entries in case a sorting error slipped
+# into the file
+updating=$( mktemp /tmp/available_updates.updating.XXXXXX )
+grep -E '^[[:digit:]]{8}:' /usr/ports/UPDATING |\
+  cut -d: -f1 |\
+  sort -u -r -o $updating
+
+# find the first UPDATING entry that is older than the install
+# date of the package
+while read entry; do
+  entrydate=$( date -j -f '%Y%m%d' "${entry}" '+%s' )
+  if ! [ $entrydate -gt $installdate ]; then
+    cutdate="${entry}"
+    break
+  fi
+done < $updating
+rm $updating 2>/dev/null
+
+# Escape / characters in origin string
+escaped_origin=$( printf '%s' "${origin}" |\
+  sed -e 's/\//\\\//g' )
+
+# Determine the number of entries in UPDATING for that origin
+# since the installation of the package
+#
+# First sed cuts the file header above the first date entry
+# Second sed cuts from the cutdate entry to end of file
+# Third sed filters AFFECTS lines
+# Fourth sed filters our origin path
+updating_entries=$(
+  sed -E -n -e '/^[[:digit:]]{8}:/,$ p' /usr/ports/UPDATING |\
+    sed -E -n -e '/^'"${cutdate}"':/,$ !p' |\
+    sed -E -n -e '/^[[:space:]]+AFFECTS:/ p' |\
+    sed -E -n -e '/'"${escaped_origin}"'/ p' |\
+    wc -l |\
+    awk '{ print $1 }' )
 
 # get currently installed version
 current=$( pkg query %v $origin )
