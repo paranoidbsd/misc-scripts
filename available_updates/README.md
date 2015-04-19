@@ -67,14 +67,14 @@ The flags are:
 * `-` for cases that have no flag of their own
 * `X` something went wrong with the script somewhere
 
-If the flag is followed by a `+` instead of a `:`, then at least one
-entry in UPDATING exists for which the following is true:
+If the flag is followed by a `+` instead of a `:` then at least one
+entry in `UPDATING` exists for which the following is true:
 * the port's origin is listed in the entry's AFFECTS line
 * the entry is newer than the current package's install date
 
 The predicates are:
 * `<` for available updates
-* `<` for available downgrades
+* `>` for available downgrades
 * `=` for orphaned ports that have been removed
 * `?` for orphaned ports that have been moved/replaced
 
