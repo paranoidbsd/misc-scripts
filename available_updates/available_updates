@@ -4,6 +4,7 @@ if [ `id -u` -ne 0 ]; then
 fi
 
 portsnap fetch update >/dev/null
+make -C /usr/ports index >/dev/null
 portmaster -y --check-port-dbdir >/dev/null
 portmaster -y --check-depends >/dev/null
 portmaster -y --clean-distfiles >/dev/null

@@ -9,104 +9,67 @@ for _oldf in /tmp/available_updates.*; do
   rm "${_oldf}" 2>/dev/null
 done
 
-# Update audit database if necessary
-pkg audit -F >/dev/null 2>&1
+# set degree of parallelism for batch operations
+DOP=8
 
-# Create first temporary file and fill it with information about
-# ports that can be updated
+# Update audit database if necessary. pkg-audit has no
+# --fetch-only, so supply a single pkg chosen by fair dice
+# roll to reduce unnecessary processing at this stage
+pkg audit -F 'pkg-1.5.0' >/dev/null 2>&1
+
+# Create first temporary file and fill it with origin information
+# about ports that can be updated
+# Use the index file that was rebuild by available_updates
 f_one=`mktemp /tmp/available_updates.XXXXXX`
-pkg version -voUPL= | sort -u > $f_one
+pkg version -voUL= | awk '{ print $1 }' > $f_one
 
 # Determine the longest current version number, increase it by one
-# for use as printf alignment offset
-verlen=`awk '{ print $1 }' < $f_one |\
- xargs -L1 pkg query '%v' |\
- wc -L | awk '{ print $1 }'`
-verlen=$(( verlen + 1 ))
+# for use as printf alignment offset.
+#
+# pkg-query writes its output in two operations, first the version
+# then the newline. So when multiple parallel invocations write into
+# the same pipe, there can be (and are) writes to the pipe by other
+# processes between a version and its newline, leading to lines that
+# contain two version numbers and lines that are blank.
+# Adding the newline to the format string ensures every version number
+# is on its own line, at the cost of a couple more empty lines which
+# are filtered out via sed (not really necessary strictly speaking,
+# since they would not be the longest line anyway).
+version_len=$( xargs -n1 -P${DOP} pkg query '%v\n' < $f_one |\
+ sed -n -e '/^$/!p' |\
+ wc -L |\
+ awk '{ print $1 }' )
+version_len=$(( version_len + 1 ))
 
 # Determine the longest origin path, increase it by one for use as
 # printf alignment offset
-width=`awk '{ print $1 }' < $f_one |\
-  wc -L | awk '{ print $1 }'`
-width=$(( width + 1 ))
+origin_len=$( wc -L $f_one |\
+  awk '{ print $1 }' )
+origin_len=$(( origin_len + 1 ))
 
-# Create second temporay file
-f_two=`mktemp /tmp/available_updates.XXXXXX`
-
-# Build the output file
-while read origin op status; do
-  # reset var between loop iterations
-  unset flag
-
-  # get current version
-  curver=`pkg query %v $origin`
-
-  # build a pkg string that `pkg audit` recognizes and check if the
-  # current version has a known security vulnerability.
-  # Set $flag indicator to V if it does
-  name=`pkg query %n-%v $origin`
-  if ! pkg audit "${name}" >/dev/null 2>&1; then
-    : ${flag:=V}
-  fi
-
-  # handle at least the most common cases specifically
-  if printf '%s' "${status}" | grep 'needs updating' >/dev/null 2>&1;
-  then
-    # extract available version
-    newver=`printf '%s' "${status}" |\
-      sed -E -e 's/needs updating \(port has (.*)\)/\1/'`
-
-    # strip the _foo part of the port version that indicates an
-    # updated port, with no change in upstream version
-    cleancur=`printf '%s' "${curver}" | sed -E -e 's/[_,].*$//'`
-    cleannew=`printf '%s' "${newver}" | sed -E -e 's/[_,].*$//'`
-
-    # check if the upstream version of the installed port is the same
-    # as the upstream version of the available port. If yes, set the
-    # $flag indicator to P
-    predicate=`pkg version -t "${cleancur}" "${cleannew}"`
-    if [ "${predicate}" = '=' ]; then
-      : ${flag:=P}
-    fi
-    # if the $flag indicator is still unset, the upstream port version
-    # has changed. Set it to U
-    : ${flag:=U}
-
-    # Check pkg audit if the new version available for installation is
-    # affected by a known security vulnerability. Override $flag with
-    # ! if it is.
-    #
-    # Use make and set make.conf to NULL to avoid triggering the name
-    # rewriting done by bsd.default-versions.mk, this way the original
-    # name of the package can be retrieved. Using the rewritten package
-    # name registered with pkg can lead to the package being compared
-    # with the wrong VuXML entry, ie. lang/ruby20 masking as ruby- and
-    # being compared to the version number from lang/ruby21 - being
-    # always vulnerable.
-    newname=`make -D__MAKE_CONF -C /usr/ports/${origin} package-name`
-    if ! pkg audit "${newname}" >/dev/null 2>&1; then
-      flag="!"
-    fi
-  elif printf '%s' "${status}" | grep 'orphaned' >/dev/null 2>&1; then
-    # handle orphaned ports
-    newver='orphaned'
-    : ${flag:=O}
-  else
-    # handle everything else, like installed newer than ports
-    newver="${status}"
-    : ${flag:=-}
-  fi
-
-  # write information about current port to output file
-  printf "%-${width}s" "${origin}" >> $f_two
-  printf '%-3s' "${flag:-X}:" >> $f_two
-  printf "%-${verlen}s" "${curver}" >> $f_two
-  printf '%-2s' "${op}" >> $f_two
-  printf '%s\n' "${newver}" >> $f_two
+# Start processing tasks in batches of DOP to speed things up.
+# wait for the up to DOP-1 tasks that could still be running
+# after the loop
+count=0
+while read origin; do
+  recalc_updates_task $origin $origin_len $version_len &
+  let count+=1 >/dev/null
+  [ $(( count%DOP )) -eq 0 ] && wait
 done < $f_one
+[ $(( count%DOP )) -ne 0 ] && wait
 
-# Remove first temporary file, move second one in live file location
-rm $f_one
-mv $f_two /root/available_updates.txt
+# Create second temporay file, collect the status files generated
+# by recalc_task into it, sort it and write the sorted output back
+# into our first temporary file.
+# Then move it into the live file location and clean up
+f_two=`mktemp /tmp/available_updates.XXXXXX`
+for task in /tmp/available_updates.task.*; do
+  cat $task >> $f_two
+  rm $task
+done
+sort $f_two > $f_one
+mv $f_one /root/available_updates.txt
+rm $f_two
+
 # Display the created file
 ${PAGER:-more} /root/available_updates.txt

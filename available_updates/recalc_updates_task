@@ -1,0 +1,103 @@
+#!/bin/sh
+origin=$1
+origin_len=$2
+version_len=$3
+
+# write information about current task to output file
+write_output_and_exit () {
+  local taskfile
+  taskfile=$( mktemp /tmp/available_updates.task.XXXXXX )
+
+  printf "%-${origin_len}s" "${origin}" >> $taskfile
+  printf '%-3s' "${flag:-X}:" >> $taskfile
+  printf "%-${version_len}s" "${current}" >> $taskfile
+  printf '%-2s' "${predicate}" >> $taskfile
+  printf '%s\n' "${available}" >> $taskfile
+  exit 0
+}
+
+
+# get currently installed version
+current=$( pkg query %v $origin )
+
+# build a string that `pkg audit` recognizes and check if the
+# current version has a known security vulnerability.
+# Set $flag indicator to V if it does
+name=$( pkg query %n-%v $origin )
+if ! pkg audit "${name}" >/dev/null 2>&1; then
+  : ${flag:=V}
+fi
+
+# if the origin directory no longer exists, the port is orphaned,
+# check /usr/ports/MOVED to determine its fate.
+# set $flag to O if it has not already been set
+if ! [ -d /usr/ports/$origin ]; then
+  location=$( grep "^${origin}" /usr/ports/MOVED |\
+    tail -1 |\
+    cut -d\| -f 2 )
+
+  if [ -z "${location}" ]; then
+    available="orphaned (REMOVED)"
+    predicate="="
+  else
+    available="orphaned (MOVED: ${location})"
+    predicate="?"
+  fi
+
+  : ${flag:=O}
+  write_output_and_exit
+fi
+
+# determine available version. Porter's Handbook states that
+# PORTVERSION is not allowed to contain a -, so everything after
+# the last - is the version number
+available=$( make -C /usr/ports/$origin package-name |\
+  sed -E -e 's/.*-([^-]+)$/\1/' )
+
+# Determine relation between $current and $available
+# Input list is expected to be filtered to not contain
+# $current == $available entries
+predicate=$( pkg version -t "${current}" "${available}" )
+if [ "${predicate}" = '<' ]; then
+  # remove PORTREVISION and PORTEPOCH extensions to determine
+  # if the upstream port changed. Removing EPOCH is ok here, since
+  # the test is for if it changed, not how it changed
+  up_curr=$( printf '%s' "${current}" |\
+    sed -E -e 's/[_,].*$//' )
+  up_avail=$( printf '%s' "${available}" |\
+    sed -E -e 's/[_,].*$//' )
+
+  # compare upstream parts
+  up_pred=$( pkg version -t "${up_curr}" "${up_avail}" )
+  if [ "${up_pred}" = '=' ]; then
+    # port revision changed or epoch was increased
+    : ${flag:=P}
+  else
+    # upstream port changed
+    : ${flag:=U}
+  fi
+
+  # Check pkg-audit if the new version available for installation is
+  # affected by a known security vulnerability. Override $flag with
+  # ! if it is.
+  #
+  # Use make and set make.conf to NULL to avoid triggering the name
+  # rewriting done by bsd.default-versions.mk, this way the original
+  # name of the package can be retrieved. Using the rewritten package
+  # name registered with pkg can lead to the package being compared
+  # with the wrong VuXML entry, ie. lang/ruby20 masking as ruby- and
+  # being compared to the version number from lang/ruby21 which is
+  # the port default and normally installed as ruby-, thus being
+  # always vulnerable.
+  original=$( make -D__MAKE_CONF -C /usr/ports/${origin} package-name )
+  if ! pkg audit "${original}" >/dev/null 2>&1; then
+    flag="!"
+  fi
+elif [ "${predicate}" = '>' ]; then
+  : ${flag:=D}
+  available="${available} (DOWNGRADE)"
+else
+  : ${flag:=-}
+fi
+
+write_output_and_exit
