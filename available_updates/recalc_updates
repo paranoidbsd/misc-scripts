@@ -1,6 +1,9 @@
 #!/bin/sh
+output_file='/root/available_updates.txt'
+
 # Must be root to play
 if [ `id -u` -ne 0 ]; then
+  printf '%s\n' "Script must be executed as root" >&2
   exit 77
 fi
 
@@ -21,6 +24,7 @@ pkg audit -F 'pkg-1.5.0' >/dev/null 2>&1
 # about ports that can be updated
 # Use the index file that was rebuild by available_updates
 f_one=`mktemp /tmp/available_updates.XXXXXX`
+[ $? -ne 0 ] && exit 73
 pkg version -voUL= | awk '{ print $1 }' > $f_one
 
 # Determine the longest current version number, increase it by one
@@ -63,13 +67,14 @@ done < $f_one
 # into our first temporary file.
 # Then move it into the live file location and clean up
 f_two=`mktemp /tmp/available_updates.XXXXXX`
+[ $? -ne 0 ] && exit 73
 for task in /tmp/available_updates.task.*; do
   cat $task >> $f_two
   rm $task
 done
-sort $f_two > $f_one
-mv $f_one /root/available_updates.txt
+sort -o $f_one $f_two
+mv $f_one "${output_file}"
 rm $f_two
 
 # Display the created file
-${PAGER:-more} /root/available_updates.txt
+${PAGER:-more} "${output_file}"
