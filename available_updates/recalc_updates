@@ -69,6 +69,7 @@ done < $f_one
 f_two=`mktemp /tmp/available_updates.XXXXXX`
 [ $? -ne 0 ] && exit 73
 for task in /tmp/available_updates.task.*; do
+  ! [ -f "${task}" ] && continue
   cat $task >> $f_two
   rm $task
 done
