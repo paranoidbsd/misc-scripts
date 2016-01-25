@@ -78,4 +78,26 @@ The predicates are:
 * `=` for orphaned ports that have been removed
 * `?` for orphaned ports that have been moved/replaced
 
+Output Example
+--------------
+
+```
+% grep -Ev '[UP]:' /root/available_updates.txt
+devel/icu              U+ 53.1          < 55.1
+lang/php56             V: 5.6.7         < 5.6.8
+www/chromium           !: 40.0.2214.115 < 42.0.2311.90
+www/firefox            V: 37.0.1,1      < 37.0.2_1,1
+```
+
+* icu has an available update with UPDATING entry
+* php56 and firefox have known vulnerabilities listed in VuXML that
+  the available versions will update
+* chromium has known vulnerabilities both in the current version as
+  well as in the available one, ie. there is no fix available so far
+  via ports
+
+
+Copyright
+=========
+
 Too trivial for copyright.
